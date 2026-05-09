@@ -1,36 +1,35 @@
-import os
-import torchaudio
-
-def parse_ravdess_filename(filepath):
-    # e.g., 03-01-06-01-02-01-12.wav
-    filename = os.path.basename(filepath)
-    parts = filename.replace('.wav', '').split('-')
-    
-    # Map emotion codes from the RAVDESS documentation
-    emotion_map = {
-        '01': 'neutral', '02': 'calm', '03': 'happy', '04': 'sad',
-        '05': 'angry', '06': 'fearful', '07': 'disgust', '08': 'surprised'
-    }
-    
-    emotion_code = parts[2]
-    intensity_code = parts[3]
-    actor_id = parts[6]
-    
-    emotion = emotion_map.get(emotion_code, 'unknown')
-    intensity = 'strong' if intensity_code == '02' else 'normal'
-    gender = 'female' if int(actor_id) % 2 == 0 else 'male'
-    
-    return emotion, intensity, gender
-
-def create_spectrogram_torchaudio(filepath):
-    # Load audio using PyTorch's audio library
-    waveform, sample_rate = torchaudio.load(filepath)
-    
-    # Create MelSpectrogram transform (this turns audio into an image for the CNN)
-    transform = torchaudio.transforms.MelSpectrogram(
-        sample_rate=sample_rate,
-        n_fft=1024,
-        hop_length=512,
-        n_mels=64
-    )
-    return transform(waveform)
+        # --- PRE-PROCESSING TECHNIQUES ---
+        
+        # TECHNIQUE 1: Peak Normalization
+        # Normalize first so the loudest point is 1.0. This makes setting a silence threshold easier.
+        max_val = torch.max(torch.abs(waveform))
+        if max_val > 0:
+            waveform = waveform / max_val
+            
+        # TECHNIQUE 2: Silence Trimming
+        # Remove audio where the volume is less than 1% of the peak (0.01 threshold)
+        threshold = 0.01
+        abs_wave = torch.abs(waveform)
+        # Find all indices where the volume exceeds the threshold
+        active_indices = torch.where(abs_wave > threshold)[1]
+        
+        if len(active_indices) > 0:
+            # Find the first and last time the threshold was exceeded
+            start_idx = active_indices[0]
+            end_idx = active_indices[-1]
+            # Slice the tensor to keep only the active speech portion
+            waveform = waveform[:, start_idx:end_idx+1]
+            
+        # TECHNIQUE 3: Fixed Length Padding/Truncating (Target: 3 seconds)
+        target_length = 3 * sample_rate # 3 seconds
+        current_length = waveform.shape[1]
+        
+        if current_length > target_length:
+            # Truncate if too long
+            waveform = waveform[:, :target_length]
+        elif current_length < target_length:
+            # Pad with zeros if too short
+            pad_amount = target_length - current_length
+            waveform = torch.nn.functional.pad(waveform, (0, pad_amount))
+            
+        # --- END PRE-PROCESSING ---
