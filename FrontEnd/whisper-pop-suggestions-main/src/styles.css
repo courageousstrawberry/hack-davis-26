@@ -1,0 +1,114 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 1rem;
+  /* Palette: #f6d809 yellow, #a4dad2 mint, #93c572 green, #bce08a light-green, #569099 teal */
+  --background: oklch(0.97 0.03 180);
+  --foreground: oklch(0.25 0.04 210);
+  --card: oklch(0.99 0.015 180);
+  --card-foreground: oklch(0.25 0.04 210);
+  --popover: oklch(0.99 0.015 180);
+  --popover-foreground: oklch(0.25 0.04 210);
+  --primary: oklch(0.55 0.07 210); /* #569099 teal */
+  --primary-foreground: oklch(0.99 0.005 180);
+  --primary-glow: oklch(0.83 0.06 195); /* #a4dad2 mint */
+  --secondary: oklch(0.86 0.13 130); /* #bce08a light-green */
+  --secondary-foreground: oklch(0.25 0.05 150);
+  --muted: oklch(0.92 0.04 180);
+  --muted-foreground: oklch(0.45 0.04 210);
+  --accent: oklch(0.88 0.18 95); /* #f6d809 yellow */
+  --accent-foreground: oklch(0.25 0.05 90);
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.99 0.005 180);
+  --border: oklch(0.55 0.07 210 / 20%);
+  --input: oklch(0.55 0.07 210 / 18%);
+  --ring: oklch(0.55 0.07 210);
+
+  --gradient-primary: linear-gradient(135deg, var(--primary), var(--primary-glow));
+  --gradient-bg: radial-gradient(ellipse at top, oklch(0.83 0.06 195) 0%, var(--background) 60%);
+  --shadow-glow: 0 20px 60px -15px color-mix(in oklab, var(--primary) 40%, transparent);
+  --shadow-card: 0 10px 40px -10px oklch(0.55 0.07 210 / 25%);
+
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--card-foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  --background: oklch(0.16 0.02 280);
+  --foreground: oklch(0.98 0.005 280);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background: var(--gradient-bg);
+    color: var(--color-foreground);
+    min-height: 100vh;
+  }
+}
+
+@utility bg-gradient-primary {
+  background-image: var(--gradient-primary);
+}
+@utility shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  70% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+@utility animate-pulse-ring {
+  animation: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
