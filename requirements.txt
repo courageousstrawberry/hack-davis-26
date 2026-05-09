@@ -1,0 +1,16 @@
+# Machine Learning Framework
+torch>=2.2.0
+torchaudio>=2.2.0
+
+# Data Processing
+numpy>=1.26.0
+librosa>=0.10.1
+pandas>=2.2.0
+
+# API and Backend (Updated for Gemini)
+google-genai>=0.3.0
+python-dotenv>=1.0.1
+
+# Frontend / UI (for the demo)
+streamlit>=1.31.0
+gradio>=4.16.0
