@@ -66,5 +66,5 @@ def predict_emotion(audio_path, model_path='saved_models/combined_emotion_cnn.pt
 
 if __name__ == '__main__':
     # Using your downloaded scream test file!
-    test_file = "/home/pc/Downloads/man-scream-01.wav" 
+    test_file = "/home/pc/Downloads/storegraphic-crowd-cheers-314919.mp3" 
     predict_emotion(test_file)
