@@ -6,7 +6,7 @@ import torchaudio
 from torch.utils.data import DataLoader
 
 # Import the new combined dataset
-from combined_dataset import CombinedEmotionDataset
+from src.combined_dataset import CombinedEmotionDataset
 
 # ---------------------------------------------------------
 # 1. DEFINE THE NEURAL NETWORK
@@ -73,9 +73,9 @@ def main():
     
     train_loader = DataLoader(
         dataset=train_dataset,
-        batch_size=batch_size,
+        batch_size=32,
         shuffle=True,
-        num_workers=4,
+        num_workers=8,
         pin_memory=True
     )
 
@@ -93,6 +93,9 @@ def main():
         total_samples = 0
 
         for batch_idx, (batch_audio, batch_labels) in enumerate(train_loader):
+            batch_audio = batch_audio.to(device)
+            batch_labels = batch_labels.to(device)
+            print(f"Loading batch {batch_idx} / {len(train_loader)}")
             batch_audio = batch_audio.to(device)
             batch_labels = batch_labels.to(device)
 
