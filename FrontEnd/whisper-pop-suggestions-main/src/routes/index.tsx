@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { IssuesPopup } from "@/components/IssuesPopup";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -15,6 +16,9 @@ type Suggestion = { title: string; detail: string };
 function Index() {
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [pendingTranscript, setPendingTranscript] = useState("");
+  const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
   const navigate = useNavigate();
 
   const mediaRef = useRef<MediaRecorder | null>(null);
@@ -40,16 +44,9 @@ function Index() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const transcript = data.transcript || "";
-      const suggestions = data.suggestions || [];
-      navigate({
-        to: "/suggestions",
-        search: {
-          transcript,
-          suggestions: JSON.stringify(suggestions),
-          loading: false,
-        },
-      });
+      setPendingTranscript(data.transcript || "");
+      setPendingSuggestions(data.suggestions || []);
+      toast.success("Audio analyzed — click Next Step to continue");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to analyze audio";
       toast.error(msg);
@@ -89,6 +86,21 @@ function Index() {
     e.target.value = "";
   };
 
+  const handleRestart = () => {
+    mediaRef.current?.stop();
+    mediaRef.current = null;
+    chunksRef.current = [];
+    setRecording(false);
+    setLoading(false);
+    setPopupOpen(false);
+    setPendingTranscript("");
+    setPendingSuggestions([]);
+  };
+
+  const handleNextStep = () => {
+    setPopupOpen(true);
+  };
+
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center px-6 py-12">
       <Toaster richColors position="top-center" />
@@ -98,10 +110,10 @@ function Index() {
           AI-powered audio insights
         </div>
         <h1 className="bg-gradient-primary bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl">
-          Speak. Listen. Discover.
+          Speak. We Will Listen. You Discover.
         </h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          Record or upload an audio clip and get instant suggestions tailored to what you said.
+          Record or upload an audio clip and get instant suggestions tailored to your emotions.
         </p>
 
         <div className="mt-12 flex flex-col items-center gap-6">
@@ -112,14 +124,14 @@ function Index() {
             <button
               onClick={recording ? stopRecording : startRecording}
               disabled={loading}
-              className="relative flex h-28 w-28 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground shadow-glow transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+              className="relative flex h-28 w-28 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground animate-pop-pulse hover:scale-110 active:scale-95 transition-transform duration-300 disabled:opacity-50"
               aria-label={recording ? "Stop recording" : "Start recording"}
             >
-              {recording ? <Square className="h-10 w-10" /> : <Mic className="h-10 w-10" />}
+              {loading ? <Loader2 className="h-10 w-10 animate-spin" /> : recording ? <Square className="h-10 w-10" /> : <Mic className="h-10 w-10" />}
             </button>
           </div>
           <p className="text-sm text-muted-foreground">
-            {recording ? "Recording… tap to stop" : "Tap to record"}
+            {loading ? "Analyzing…" : recording ? "Recording… tap to stop" : pendingSuggestions.length > 0 ? "Audio ready" : "Tap to record"}
           </p>
 
           <div className="flex items-center gap-3">
@@ -138,28 +150,29 @@ function Index() {
             </Button>
           </label>
 
-          <button
-            type="button"
-            onClick={() => {
-              navigate({
-                to: "/suggestions",
-                search: {
-                  transcript: "I want to plan a weekend trip to the mountains with my friends.",
-                  suggestions: JSON.stringify([
-                    { title: "Pick a destination", detail: "Shortlist 2–3 mountain spots within driving distance." },
-                    { title: "Check the weather", detail: "Review the forecast before locking dates." },
-                    { title: "Build a packing list", detail: "Layers, hiking shoes, water, and snacks." },
-                    { title: "Share an itinerary", detail: "Send a draft plan to friends for input." },
-                    { title: "Book early", detail: "Reserve cabins or campsites this week." },
-                  ]),
-                  loading: false,
-                },
-              });
-            }}
-            className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
-          >
-            See example
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleNextStep}
+              disabled={loading || recording || pendingSuggestions.length === 0}
+              className="inline-flex items-center justify-center rounded-full bg-gradient-primary px-8 py-3 text-sm font-semibold text-primary-foreground shadow-glow transition hover:opacity-90 disabled:opacity-40"
+            >
+              Next Step
+            </button>
+            <button
+              type="button"
+              onClick={handleRestart}
+              className="inline-flex items-center justify-center rounded-full border border-border bg-background px-8 py-3 text-sm font-semibold text-foreground transition hover:bg-muted"
+            >
+              Restart
+            </button>
+          </div>
+          <IssuesPopup
+            open={popupOpen}
+            onClose={() => setPopupOpen(false)}
+            transcript={pendingTranscript}
+            suggestions={pendingSuggestions}
+          />
         </div>
       </div>
     </main>
