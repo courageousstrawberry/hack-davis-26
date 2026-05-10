@@ -48,7 +48,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    batch_size = 256
+    batch_size = 32
     learning_rate = 0.001
     num_epochs = 30
     data_dir = './data/train' 
