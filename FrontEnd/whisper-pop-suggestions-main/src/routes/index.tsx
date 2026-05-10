@@ -11,26 +11,24 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Suggestion = { title: string; detail: string };
+const FLASK_URL = "http://localhost:5000";
 
 function Index() {
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const [popupOpen, setPopupOpen] = useState(false);
+  const [pendingEmotion, setPendingEmotion] = useState("");
   const [pendingTranscript, setPendingTranscript] = useState("");
-  const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
   const navigate = useNavigate();
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioReady = pendingTranscript !== "" || pendingEmotion !== "";
 
   const blobToBase64 = (blob: Blob) =>
     new Promise<string>((resolve, reject) => {
       const r = new FileReader();
-      r.onloadend = () => {
-        const s = (r.result as string).split(",")[1];
-        resolve(s);
-      };
+      r.onloadend = () => resolve((r.result as string).split(",")[1]);
       r.onerror = reject;
       r.readAsDataURL(blob);
     });
@@ -39,14 +37,37 @@ function Index() {
     setLoading(true);
     try {
       const audio = await blobToBase64(blob);
-      const { data, error } = await supabase.functions.invoke("analyze-audio", {
-        body: { audio, mimeType },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setPendingTranscript(data.transcript || "");
-      setPendingSuggestions(data.suggestions || []);
-      toast.success("Audio analyzed — click Next Step to continue");
+
+      // Run CNN emotion detection (Flask) and transcription (Supabase) in parallel
+      const [emotionResult, transcriptResult] = await Promise.allSettled([
+        fetch(`${FLASK_URL}/predict-emotion`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio, mimeType }),
+        }).then((r) => r.json()),
+        supabase.functions.invoke("analyze-audio", {
+          body: { audio, mimeType },
+        }),
+      ]);
+
+      const emotion =
+        emotionResult.status === "fulfilled" && !emotionResult.value.error
+          ? emotionResult.value.emotion
+          : "";
+
+      const transcript =
+        transcriptResult.status === "fulfilled" && !transcriptResult.value.error
+          ? transcriptResult.value.data?.transcript || ""
+          : "";
+
+      if (!emotion && !transcript) {
+        toast.error("Could not analyze audio. Please try again.");
+        return;
+      }
+
+      setPendingEmotion(emotion);
+      setPendingTranscript(transcript);
+      toast.success(`Audio ready${emotion ? ` — emotion: ${emotion}` : ""}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to analyze audio";
       toast.error(msg);
@@ -93,12 +114,8 @@ function Index() {
     setRecording(false);
     setLoading(false);
     setPopupOpen(false);
+    setPendingEmotion("");
     setPendingTranscript("");
-    setPendingSuggestions([]);
-  };
-
-  const handleNextStep = () => {
-    setPopupOpen(true);
   };
 
   return (
@@ -131,7 +148,7 @@ function Index() {
             </button>
           </div>
           <p className="text-sm text-muted-foreground">
-            {loading ? "Analyzing…" : recording ? "Recording… tap to stop" : pendingSuggestions.length > 0 ? "Audio ready" : "Tap to record"}
+            {loading ? "Analyzing…" : recording ? "Recording… tap to stop" : audioReady ? `Ready${pendingEmotion ? ` · ${pendingEmotion}` : ""}` : "Tap to record"}
           </p>
 
           <div className="flex items-center gap-3">
@@ -153,8 +170,8 @@ function Index() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleNextStep}
-              disabled={loading || recording || pendingSuggestions.length === 0}
+              onClick={() => setPopupOpen(true)}
+              disabled={loading || recording || !audioReady}
               className="inline-flex items-center justify-center rounded-full bg-gradient-primary px-8 py-3 text-sm font-semibold text-primary-foreground shadow-glow transition hover:opacity-90 disabled:opacity-40"
             >
               Next Step
@@ -167,11 +184,12 @@ function Index() {
               Restart
             </button>
           </div>
+
           <IssuesPopup
             open={popupOpen}
             onClose={() => setPopupOpen(false)}
+            emotion={pendingEmotion}
             transcript={pendingTranscript}
-            suggestions={pendingSuggestions}
           />
         </div>
       </div>

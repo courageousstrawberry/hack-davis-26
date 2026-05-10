@@ -8,23 +8,18 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { text, categories } = await req.json();
-    if (!text && (!categories || categories.length === 0)) {
-      return new Response(JSON.stringify({ error: "Missing text or categories" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { emotion, categories, text, transcript } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const userMessage = [
-      categories?.length ? `Issue categories: ${categories.join(", ")}.` : "",
-      text ? `User description: "${text}"` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const contextParts: string[] = [];
+    if (emotion) contextParts.push(`Detected emotion from voice: ${emotion}`);
+    if (categories?.length) contextParts.push(`Issue areas: ${categories.join(", ")}`);
+    if (transcript) contextParts.push(`What they said: "${transcript}"`);
+    if (text) contextParts.push(`Additional context: "${text}"`);
+
+    const userMessage = contextParts.join(". ") + ". Please provide helpful, empathetic suggestions.";
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -38,23 +33,20 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You are a supportive assistant. Given a user's issue categories and description, return 4-6 helpful, varied, actionable suggestions. Always respond by calling the provided tool.",
+              "You are a supportive, empathetic wellbeing assistant. Given a user's detected emotion, issue categories, and their own words, return 4-6 specific, actionable, and compassionate suggestions tailored to their emotional state and situation. Always respond by calling the provided tool.",
           },
-          {
-            role: "user",
-            content: `${userMessage} Please provide helpful suggestions.`,
-          },
+          { role: "user", content: userMessage },
         ],
         tools: [
           {
             type: "function",
             function: {
               name: "return_suggestions",
-              description: "Return a summary and suggestions",
+              description: "Return a summary and tailored suggestions",
               parameters: {
                 type: "object",
                 properties: {
-                  transcript: { type: "string", description: "Brief summary of the user's issue" },
+                  transcript: { type: "string", description: "Brief empathetic summary of the user's situation" },
                   suggestions: {
                     type: "array",
                     items: {
@@ -83,19 +75,16 @@ Deno.serve(async (req) => {
       console.error("AI gateway error:", resp.status, errText);
       if (resp.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (resp.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Add credits in workspace settings." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -109,8 +98,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("analyze-text error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

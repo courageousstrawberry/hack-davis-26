@@ -54,7 +54,7 @@ def main():
     data_dir = './data/train' 
 
     mel_transform = torch.nn.Sequential(
-        torchaudio.transforms.MelSpectrogram(sample_rate=48000, n_mels=128),
+        torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_mels=128),
         torchaudio.transforms.AmplitudeToDB() 
     ).to(device)
 
