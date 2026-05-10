@@ -1,106 +1,121 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchaudio
-from torch.utils.data import DataLoader, random_split
-import os
+from torch.utils.data import DataLoader
 
-# Import the classes we just made
-from dataset import RAVDESSDataset
-from model import EmotionCNN
+# Import the new combined dataset
+from combined_dataset import CombinedEmotionDataset
 
-def train_model():
-    # 1. SETUP HARDWARE
+# ---------------------------------------------------------
+# 1. DEFINE THE NEURAL NETWORK
+# ---------------------------------------------------------
+class EmotionCNN(nn.Module):
+    def __init__(self, num_classes=6): # Changed default to 6 classes
+        super(EmotionCNN, self).__init__()
+        
+        # First Convolutional Block
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, padding=1)
+        self.relu1 = nn.ReLU()
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Second Convolutional Block
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        self.relu2 = nn.ReLU()
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Adaptive pooling ensures the output is always 16x16
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((16, 16))
+        
+        # Fully Connected Layers
+        self.fc1 = nn.Linear(32 * 16 * 16, 128)
+        self.relu3 = nn.ReLU()
+        self.dropout = nn.Dropout(0.5)
+        
+        # Final output layer
+        self.fc2 = nn.Linear(128, num_classes)
+
+    def forward(self, x):
+        x = self.pool1(self.relu1(self.conv1(x)))
+        x = self.pool2(self.relu2(self.conv2(x)))
+        x = self.adaptive_pool(x)
+        
+        x = x.view(x.size(0), -1) 
+        
+        x = self.relu3(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
+# ---------------------------------------------------------
+# 2. MAIN TRAINING SCRIPT
+# ---------------------------------------------------------
+def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Training on device: {device}")
+    print(f"Using device: {device}")
 
-    # 2. PREPARE DATA
-    # Define the transform to turn audio into a Mel-spectrogram
-    mel_transform = torchaudio.transforms.MelSpectrogram(
-        sample_rate=48000, 
-        n_mels=64
+    batch_size = 32
+    learning_rate = 0.001
+    num_epochs = 30
+    
+    # Point this to your combined training data directory
+    data_dir = './data/train' 
+
+    mel_transform = torch.nn.Sequential(
+        torchaudio.transforms.MelSpectrogram(sample_rate=48000, n_mels=128),
+        torchaudio.transforms.AmplitudeToDB() 
     )
-    
-    # Load dataset
+
     print("Loading dataset...")
-    # Using relative path '../data/raw' assuming you run this from inside the src/ folder
-    dataset = RAVDESSDataset(data_dir='../data/raw', transform=mel_transform)
+    # Use the new CombinedEmotionDataset
+    train_dataset = CombinedEmotionDataset(data_dir=data_dir, transform=mel_transform)
     
-    # 2.5 SPLIT DATA INTO TRAIN AND VALIDATION SETS
-    # Standard 80% train / 20% validation split
-    total_size = len(dataset)
-    train_size = int(0.8 * total_size)
-    val_size = total_size - train_size
-    
-    # random_split ensures the model is tested on audio it didn't memorize during training
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    
-    # Create DataLoaders for both sets
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
+    )
 
-    # 3. INITIALIZE THE MODEL
-    model = EmotionCNN(num_classes=8).to(device)
-    
-    # 4. DEFINE LOSS AND OPTIMIZER
+    # Initialize model with 6 classes
+    model = EmotionCNN(num_classes=6).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # 5. TRAINING LOOP
-    num_epochs = 20
-    print("Starting training...")
+    print(f"Starting training for {num_epochs} epochs...")
     
     for epoch in range(num_epochs):
-        # --- TRAINING PHASE ---
-        model.train() # Set model to training mode
-        running_train_loss = 0.0
-        
-        for waveforms, labels in train_loader:
-            waveforms, labels = waveforms.to(device), labels.to(device)
-            
+        model.train() 
+        running_loss = 0.0
+        correct_predictions = 0
+        total_samples = 0
+
+        for batch_idx, (batch_audio, batch_labels) in enumerate(train_loader):
+            batch_audio = batch_audio.to(device)
+            batch_labels = batch_labels.to(device)
+
             optimizer.zero_grad()
-            predictions = model(waveforms)
-            loss = criterion(predictions, labels)
+            outputs = model(batch_audio)
             
+            loss = criterion(outputs, batch_labels)
             loss.backward()
             optimizer.step()
-            running_train_loss += loss.item()
-            
-        avg_train_loss = running_train_loss / len(train_loader)
-        
-        # --- VALIDATION PHASE ---
-        model.eval() # Set model to evaluation mode (turns off dropout/batchnorm updates)
-        running_val_loss = 0.0
-        correct_predictions = 0
-        total_predictions = 0
-        
-        # Use torch.no_grad() to save memory and speed up validation
-        with torch.no_grad():
-            for waveforms, labels in val_loader:
-                waveforms, labels = waveforms.to(device), labels.to(device)
-                
-                predictions = model(waveforms)
-                loss = criterion(predictions, labels)
-                running_val_loss += loss.item()
-                
-                # Calculate accuracy
-                _, predicted_classes = torch.max(predictions, 1)
-                total_predictions += labels.size(0)
-                correct_predictions += (predicted_classes == labels).sum().item()
-                
-        avg_val_loss = running_val_loss / len(val_loader)
-        val_accuracy = 100 * correct_predictions / total_predictions
-        
-        print(f"Epoch [{epoch+1}/{num_epochs}] "
-              f"| Train Loss: {avg_train_loss:.4f} "
-              f"| Val Loss: {avg_val_loss:.4f} "
-              f"| Val Accuracy: {val_accuracy:.2f}%")
 
-    # 6. SAVE THE TRAINED MODEL
-    os.makedirs('../checkpoints', exist_ok=True)
-    save_path = '../checkpoints/emotion_model_v1.pth'
-    torch.save(model.state_dict(), save_path)
-    print(f"Training complete! Model saved to {save_path}")
+            running_loss += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total_samples += batch_labels.size(0)
+            correct_predictions += (predicted == batch_labels).sum().item()
 
-if __name__ == "__main__":
-    train_model()
+        epoch_loss = running_loss / len(train_loader)
+        epoch_acc = 100 * correct_predictions / total_samples
+        print(f"Epoch [{epoch+1}/{num_epochs}] | Loss: {epoch_loss:.4f} | Accuracy: {epoch_acc:.2f}%")
+
+    print("Training complete!")
+    os.makedirs('saved_models', exist_ok=True)
+    torch.save(model.state_dict(), 'saved_models/combined_emotion_cnn.pth')
+    print("Model weights saved to 'saved_models/combined_emotion_cnn.pth'")
+
+if __name__ == '__main__':
+    main()
