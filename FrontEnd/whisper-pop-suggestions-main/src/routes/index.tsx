@@ -4,7 +4,6 @@ import { Mic, Square, Upload, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { IssuesPopup } from "@/components/IssuesPopup";
 
 export const Route = createFileRoute("/")({
@@ -38,16 +37,18 @@ function Index() {
     try {
       const audio = await blobToBase64(blob);
 
-      // Run CNN emotion detection (Flask) and transcription (Supabase) in parallel
+      // Run emotion detection and transcription against the local Flask backend.
       const [emotionResult, transcriptResult] = await Promise.allSettled([
         fetch(`${FLASK_URL}/predict-emotion`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ audio, mimeType }),
         }).then((r) => r.json()),
-        supabase.functions.invoke("analyze-audio", {
-          body: { audio, mimeType },
-        }),
+        fetch(`${FLASK_URL}/analyze-audio`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio, mimeType }),
+        }).then((r) => r.json()),
       ]);
 
       const emotion =
