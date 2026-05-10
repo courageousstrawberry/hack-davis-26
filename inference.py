@@ -1,8 +1,6 @@
-
-
 import torch
 import torchaudio
-from src.model import EmotionCNN # (Change 'src.model' to wherever your CNN is!)
+from src.train import EmotionCNN # (Change 'src.model' to wherever your CNN is!)
 
 def predict_emotion(audio_path, model_path='saved_models/combined_emotion_cnn.pth'):
     # 1. Setup
