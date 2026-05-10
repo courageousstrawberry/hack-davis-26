@@ -1,6 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import torch
 import torchaudio
-from src.train import EmotionCNN # (Change 'src.model' to wherever your CNN is!)
+
+# Import your neural network from your train.py file
+from src.train import EmotionCNN
 
 def predict_emotion(audio_path, model_path='saved_models/combined_emotion_cnn.pth'):
     # 1. Setup
@@ -10,15 +16,22 @@ def predict_emotion(audio_path, model_path='saved_models/combined_emotion_cnn.pt
     # 2. Load the "Brain"
     print("Loading model...")
     model = EmotionCNN(num_classes=6)
+    
+    # Load the weights safely
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     model.to(device)
-    model.eval() # Freezes the brain so it doesn't try to learn!
+    model.eval() # Freezes the brain
     
     # 3. Load and Preprocess the Single File
     print(f"Processing audio: {audio_path}")
     waveform, sample_rate = torchaudio.load(audio_path)
     
-    # Resample to 16kHz if needed (like your dataset did)
+    # --- THE FIX: Convert Stereo to Mono ---
+    if waveform.shape[0] > 1:
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+        print("   (Converted Stereo audio to Mono)")
+        
+    # Resample to 16kHz to match training data
     if sample_rate != 16000:
         resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
         waveform = resampler(waveform)
@@ -30,13 +43,14 @@ def predict_emotion(audio_path, model_path='saved_models/combined_emotion_cnn.pt
     else:
         waveform = torch.nn.functional.pad(waveform, (0, target_length - waveform.shape[1]))
     
-    # Apply Mel-Spectrogram transform
+    # Apply Mel-Spectrogram transform on the device
     mel_transform = torch.nn.Sequential(
         torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_mels=128),
         torchaudio.transforms.AmplitudeToDB() 
     ).to(device)
     
-    waveform = waveform.unsqueeze(0).to(device) # Add a batch dimension for the single file
+    # Add batch dimension and move to GPU
+    waveform = waveform.unsqueeze(0).to(device) 
     spectrogram = mel_transform(waveform)
     
     # 4. Ask the model for a prediction!
@@ -51,6 +65,6 @@ def predict_emotion(audio_path, model_path='saved_models/combined_emotion_cnn.pt
     print(f"\nResult: The model is {confidence.item()*100:.1f}% confident this audio is {predicted_emotion.upper()}!")
 
 if __name__ == '__main__':
-    # You can change this path to any .wav file on your computer!
+    # Using your downloaded scream test file!
     test_file = "/home/pc/Downloads/man-scream-01.wav" 
     predict_emotion(test_file)
