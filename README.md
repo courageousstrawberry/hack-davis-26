@@ -40,7 +40,6 @@ Frontend
 
 Notes
 - The app transcribes audio locally (faster-whisper) and runs a local emotion model. Ensure `ffmpeg` is installed for audio conversion.
-- Supabase integration has been removed from this repo; no database or Supabase keys are required to run the app locally.
 - If you encounter missing dependency errors, re-check the environment activation and required packages.
 
 Troubleshooting

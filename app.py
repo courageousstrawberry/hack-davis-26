@@ -71,7 +71,6 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_mod
 load_model(MODEL_PATH)
 
 gemini = genai.Client(api_key=os.getenv("AI_API_KEY"))
-GEMINI_MODEL = "gemini-3.1-pro-preview"
 
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 _whisper_model = None
